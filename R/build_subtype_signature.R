@@ -8,7 +8,7 @@
 #' @export
 build_subtype_signature <- function(highfunc_file,
                                     senescent_file,
-                                    gene_col = "gene") {
+                                    gene_col = "gene_symbol") {
 
   # 读取C0高功能亚群标志基因
   highfunc <- read.csv(highfunc_file)
