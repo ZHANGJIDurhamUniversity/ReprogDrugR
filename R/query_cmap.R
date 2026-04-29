@@ -6,7 +6,7 @@
 #' @param tau Logical, whether to compute tau score (default FALSE)
 #' @param workers Number of parallel workers for database query (default 1)
 #'
-#' @return A dataframe of top drug candidates with scores
+#' @return A dataframe of top drug candidates with scores and LINCS annotations
 #' @export
 query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE, workers = 1) {
 
@@ -77,5 +77,18 @@ query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE, worker
   )
 
   result_df <- signatureSearch::result(result)
-  return(head(result_df, n_top))
+  result_df <- head(result_df, n_top)
+
+  # Merge LINCS compound annotations
+  lincs_pert_info <- NULL
+  data("lincs_pert_info", package = "signatureSearchData", envir = environment())
+  result_df <- merge(
+    result_df,
+    lincs_pert_info,
+    by.x = "pert",
+    by.y = "pert_iname",
+    all.x = TRUE
+  )
+
+  return(result_df)
 }
