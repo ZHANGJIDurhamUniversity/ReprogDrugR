@@ -4,10 +4,11 @@
 #' @param db Database to query, either "lincs" or "lincs2" (default "lincs")
 #' @param n_top Number of top results to return (default 100)
 #' @param tau Logical, whether to compute tau score (default FALSE)
+#' @param workers Number of parallel workers for database query (default 1)
 #'
 #' @return A dataframe of top drug candidates with scores
 #' @export
-query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE) {
+query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE, workers = 1) {
 
   # Check signature structure
   if (!is.list(signature) || !all(c("upgenes", "downgenes") %in% names(signature))) {
@@ -65,7 +66,8 @@ query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE) {
 
   # Run LINCS query
   result <- tryCatch(
-    signatureSearch::gess_lincs(qSig = qsig, sortby = "NCS", tau = tau),
+    signatureSearch::gess_lincs(qSig = qsig, sortby = "NCS", tau = tau,
+                                addAnnotations = FALSE, workers = workers),
     error = function(e) {
       stop(
         "CMap/LINCS query failed. Please check whether the LINCS reference database is installed and accessible. Original error: ",
