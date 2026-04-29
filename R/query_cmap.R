@@ -3,10 +3,11 @@
 #' @param signature A list with upgenes and downgenes (from build_signature)
 #' @param db Database to query, either "lincs" or "lincs2" (default "lincs")
 #' @param n_top Number of top results to return (default 100)
+#' @param tau Logical, whether to compute tau score (default FALSE)
 #'
 #' @return A dataframe of top drug candidates with scores
 #' @export
-query_cmap <- function(signature, db = "lincs", n_top = 100) {
+query_cmap <- function(signature, db = "lincs", n_top = 100, tau = FALSE) {
 
   # Check signature structure
   if (!is.list(signature) || !all(c("upgenes", "downgenes") %in% names(signature))) {
@@ -64,7 +65,7 @@ query_cmap <- function(signature, db = "lincs", n_top = 100) {
 
   # Run LINCS query
   result <- tryCatch(
-    signatureSearch::gess_lincs(qSig = qsig, sortby = "NCS", tau = TRUE),
+    signatureSearch::gess_lincs(qSig = qsig, sortby = "NCS", tau = tau),
     error = function(e) {
       stop(
         "CMap/LINCS query failed. Please check whether the LINCS reference database is installed and accessible. Original error: ",
