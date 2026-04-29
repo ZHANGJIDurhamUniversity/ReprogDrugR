@@ -18,6 +18,8 @@ build_signature <- function(deg_file,
 
   deg <- read.csv(deg_file)
 
+  deg <- deg[!is.na(deg$gene_symbol) & deg$gene_symbol != "", ]
+
   # 过滤显著基因
   deg <- deg[!is.na(deg[[fdr_col]]), ]
   deg <- deg[deg[[fdr_col]] < fdr_cutoff, ]
