@@ -34,11 +34,20 @@
 #'   as toxic (merged with built-in beta-cell toxicity list).
 #' @param workers Integer. Number of parallel workers (default 1).
 #'   Increase on servers (e.g., workers = 25).
+#' @param reverse_only Logical. If TRUE (default), automatically retains only
+#'   NCS < 0 compounds, which represent perturbations opposite to the query
+#'   disease signature and are true disease-reversal candidates. NCS > 0
+#'   compounds mimic the disease state and are excluded from scoring.
+#'   If FALSE, all compounds are kept in the output, but the reprogramming
+#'   score still only rewards NCS < 0 compounds — NCS > 0 compounds will
+#'   receive score_ncs = 0 and score_fdr = 0 and thus score near zero.
 #'
 #' @return A dataframe sorted by reprogramming_score (descending) with columns:
 #'   \itemize{
-#'     \item \code{score_ncs}: Min-max normalized NCS (0 to 1)
-#'     \item \code{score_fdr}: FDR-based significance score (0 to 1)
+#'     \item \code{score_ncs}: Normalized absolute NCS for NCS < 0 compounds
+#'       (0 to 1); NCS > 0 compounds receive 0
+#'     \item \code{score_fdr}: FDR-based significance score (0 to 1);
+#'       only awarded to NCS < 0 compounds
 #'     \item \code{score_connectivity}: Combined NCS + FDR score (0 to 1)
 #'     \item \code{score_pathway}: Validated pathway score (0 to 1)
 #'     \item \code{matched_pathway}: Names of matched validated pathways
@@ -53,13 +62,18 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Conservative mode (main results)
+#' # Recommended: pass full query_cmap() output, let reverse_only handle filtering
 #' results_cons <- score_reprogramming(results_forward,
 #'                                     mode = "conservative")
 #'
 #' # Comprehensive mode (sensitivity analysis)
 #' results_comp <- score_reprogramming(results_forward,
 #'                                     mode = "comprehensive")
+#'
+#' # Keep all compounds in output (NCS > 0 still scores near zero)
+#' results_all  <- score_reprogramming(results_forward,
+#'                                     mode = "conservative",
+#'                                     reverse_only = FALSE)
 #'
 #' # Compare modes (Spearman correlation)
 #' compare_modes(results_cons, results_comp)
@@ -73,7 +87,8 @@ score_reprogramming <- function(forward_results,
                                 custom_validated_pathways = NULL,
                                 custom_novel_pathways     = NULL,
                                 toxicity_blacklist        = NULL,
-                                workers                   = 1) {
+                                workers                   = 1,
+                                reverse_only              = TRUE) {
 
   mode <- match.arg(mode)
 
@@ -86,6 +101,51 @@ score_reprogramming <- function(forward_results,
     stop("workers must be a positive integer")
 
   results <- forward_results
+
+  # ---------- Direction filter ----------
+  # In CMap/LINCS:
+  #   NCS < 0 = perturbation opposite to query signature = disease-reversal candidate
+  #   NCS > 0 = perturbation similar to query signature  = disease-mimicking compound
+  # Only NCS < 0 compounds are valid reprogramming candidates.
+  if (isTRUE(reverse_only)) {
+    n_before  <- nrow(results)
+    results   <- results[!is.na(results$NCS) & results$NCS < 0, , drop = FALSE]
+    n_removed <- n_before - nrow(results)
+    if (n_removed > 0) {
+      warning(sprintf(
+        paste0(
+          "%d compound(s) with NCS > 0 removed. ",
+          "These compounds mimic the disease signature and are not ",
+          "reprogramming candidates. ",
+          "Set reverse_only = FALSE to retain them in the output ",
+          "(they will still score near zero)."
+        ),
+        n_removed
+      ))
+    }
+    if (nrow(results) == 0)
+      stop(paste0(
+        "No NCS < 0 compounds found after direction filter. ",
+        "Check that forward_results contains disease-reversal compounds. ",
+        "Set reverse_only = FALSE to disable this filter."
+      ))
+  } else {
+    # Keep all compounds but warn about NCS > 0.
+    # Note: NCS > 0 compounds will receive score_ncs = 0 and score_fdr = 0
+    # and will therefore score near zero. They are retained for reference only.
+    n_positive <- sum(results$NCS > 0, na.rm = TRUE)
+    if (n_positive > 0) {
+      warning(sprintf(
+        paste0(
+          "%d compound(s) with NCS > 0 detected. ",
+          "These compounds mimic the disease signature and will receive ",
+          "score_ncs = 0 and score_fdr = 0. ",
+          "They are retained in output for reference only."
+        ),
+        n_positive
+      ))
+    }
+  }
 
   # ---------- Default weights ----------
   # Conservative:   connectivity 60% + validated pathway 40%
@@ -104,18 +164,26 @@ score_reprogramming <- function(forward_results,
   if (abs(total_w - 1) > 1e-6)
     stop(sprintf("Weights must sum to 1 (current sum: %.3f)", total_w))
 
-  # ---------- 1. NCS score: min-max normalize to (0 to 1) ----------
-  ncs_min   <- min(results$NCS, na.rm = TRUE)
-  ncs_max   <- max(results$NCS, na.rm = TRUE)
-  ncs_range <- ncs_max - ncs_min
-  if (ncs_range == 0) {
-    results$score_ncs <- 0.5
+  # ---------- 1. NCS score ----------
+  # Use absolute value of NCS for NCS < 0 compounds only.
+  # Higher absolute NCS = stronger reversal of disease signature = better candidate.
+  # NCS > 0 compounds receive score_ncs = 0.
+  results$score_ncs <- ifelse(
+    !is.na(results$NCS) & results$NCS < 0,
+    abs(results$NCS),
+    0
+  )
+
+  max_ncs <- max(results$score_ncs, na.rm = TRUE)
+  if (is.finite(max_ncs) && max_ncs > 0) {
+    results$score_ncs <- results$score_ncs / max_ncs
   } else {
-    results$score_ncs <- (results$NCS - ncs_min) / ncs_range
+    results$score_ncs <- 0
   }
 
   # ---------- 2. FDR significance score ----------
-  # Converts WTCS_FDR to (0 to 1): lower FDR = higher score
+  # Converts WTCS_FDR to (0 to 1): lower FDR = higher score.
+  # Only NCS < 0 compounds receive FDR credit.
   if ("WTCS_FDR" %in% colnames(results)) {
     results$score_fdr <- ifelse(
       is.na(results$WTCS_FDR),
@@ -126,6 +194,13 @@ score_reprogramming <- function(forward_results,
     warning("WTCS_FDR column not found; FDR score set to 0")
     results$score_fdr <- 0
   }
+
+  # Remove FDR credit from NCS > 0 compounds
+  results$score_fdr <- ifelse(
+    !is.na(results$NCS) & results$NCS < 0,
+    results$score_fdr,
+    0
+  )
 
   # ---------- 3. Connectivity score: NCS (75%) + FDR (25%) ----------
   results$score_connectivity <- 0.75 * results$score_ncs +
@@ -238,6 +313,10 @@ score_reprogramming <- function(forward_results,
   }
 
   # ---------- 8. Beta-cell toxicity blacklist (fuzzy match) ----------
+  if (is.null(toxicity_blacklist)) {
+    toxicity_blacklist <- character(0)
+  }
+
   default_toxicity <- c(
     "streptozotocin",  # selective beta-cell toxin (T1D model)
     "alloxan",         # selective beta-cell toxin
@@ -252,7 +331,7 @@ score_reprogramming <- function(forward_results,
 
   drug_col <- intersect(c("pert_iname", "pert", "name"), colnames(results))
   if (length(drug_col) > 0) {
-    drug_names   <- tolower(results[[drug_col[1]]])
+    drug_names       <- tolower(results[[drug_col[1]]])
     results$is_toxic <- sapply(drug_names, function(x) {
       any(sapply(all_toxicity, function(tox) grepl(tox, x, fixed = TRUE)))
     })
