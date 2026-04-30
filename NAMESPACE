@@ -2,6 +2,7 @@
 
 export(build_signature)
 export(build_subtype_signature)
+export(compare_modes)
 export(flag_reprogramming_blockers)
 export(plot_candidates)
 export(query_cmap)

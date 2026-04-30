@@ -4,7 +4,11 @@
 \alias{build_subtype_signature}
 \title{Build a subtype-based gene signature}
 \usage{
-build_subtype_signature(highfunc_file, senescent_file, gene_col = "gene")
+build_subtype_signature(
+  highfunc_file,
+  senescent_file,
+  gene_col = "gene_symbol"
+)
 }
 \arguments{
 \item{highfunc_file}{Path to the high-functioning beta cell markers CSV}

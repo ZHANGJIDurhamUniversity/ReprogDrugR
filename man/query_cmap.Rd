@@ -4,7 +4,14 @@
 \alias{query_cmap}
 \title{Query CMap/LINCS database with a gene signature}
 \usage{
-query_cmap(signature, db = "lincs", n_top = 100)
+query_cmap(
+  signature,
+  db = "lincs",
+  n_top = 100,
+  tau = FALSE,
+  workers = 1,
+  add_annotations = TRUE
+)
 }
 \arguments{
 \item{signature}{A list with upgenes and downgenes (from build_signature)}
@@ -12,9 +19,17 @@ query_cmap(signature, db = "lincs", n_top = 100)
 \item{db}{Database to query, either "lincs" or "lincs2" (default "lincs")}
 
 \item{n_top}{Number of top results to return (default 100)}
+
+\item{tau}{Logical, whether to compute tau score (default FALSE)}
+
+\item{workers}{Number of parallel workers for database query (default 1)}
+
+\item{add_annotations}{Logical, whether to merge LINCS compound
+annotations (default TRUE)}
 }
 \value{
-A dataframe of top drug candidates with scores
+A dataframe of top drug candidates with scores and LINCS
+annotations
 }
 \description{
 Query CMap/LINCS database with a gene signature

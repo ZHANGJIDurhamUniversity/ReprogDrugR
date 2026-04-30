@@ -2,30 +2,123 @@
 % Please edit documentation in R/score_reprogramming.R
 \name{score_reprogramming}
 \alias{score_reprogramming}
-\title{Score drug candidates for beta cell reprogramming potential}
+\title{Score drug candidates for beta-cell reprogramming potential}
 \usage{
 score_reprogramming(
   forward_results,
-  pathway_genes,
-  weight_ncs = 0.3,
-  weight_pathway = 0.3,
-  weight_literature = 0.4
+  mode = c("conservative", "comprehensive"),
+  weight_ncs = NULL,
+  weight_pathway = NULL,
+  weight_novel = NULL,
+  custom_validated_pathways = NULL,
+  custom_novel_pathways = NULL,
+  toxicity_blacklist = NULL,
+  perm = TRUE,
+  n_perm = 1000,
+  workers = 1
 )
 }
 \arguments{
-\item{forward_results}{Dataframe from query_cmap()}
+\item{forward_results}{Dataframe from query_cmap(). Must contain columns
+'NCS', 'WTCS_FDR', and an MOA column ('moa', 'MOA', 'moa_x', or 'moa.x').}
 
-\item{pathway_genes}{Named list of beta cell reprogramming pathway genes}
+\item{mode}{Scoring mode: \code{"conservative"} (default) or
+\code{"comprehensive"}.}
 
-\item{weight_ncs}{Weight for CMap NCS score (default 0.3)}
+\item{weight_ncs}{Numeric. Weight for connectivity score. Defaults: 0.6
+(conservative) or 0.5 (comprehensive).}
 
-\item{weight_pathway}{Weight for pathway score (default 0.3)}
+\item{weight_pathway}{Numeric. Weight for validated pathway score. Defaults:
+0.4 (conservative) or 0.3 (comprehensive).}
 
-\item{weight_literature}{Weight for literature score (default 0.4)}
+\item{weight_novel}{Numeric. Weight for novel pathway score (comprehensive
+mode only). Default: 0.2.}
+
+\item{custom_validated_pathways}{Optional named list of pathway -> MOA
+keyword vectors. Overrides built-in beta-cell pathway dictionary.
+Use this to adapt ReprogDrugR to other cell types.}
+
+\item{custom_novel_pathways}{Optional named list. Overrides built-in novel
+pathway dictionary.}
+
+\item{toxicity_blacklist}{Character vector of additional drug names to flag
+as toxic (merged with built-in beta-cell toxicity list).}
+
+\item{perm}{Logical. Whether to run permutation test and bootstrap CI
+(default TRUE). Set to FALSE for quick exploration on low-resource
+machines.}
+
+\item{n_perm}{Integer. Number of permutations/bootstrap iterations
+(default 1000 for publication quality; use 100 for quick testing).}
+
+\item{workers}{Integer. Number of parallel workers for permutation and
+bootstrap computation (default 1). Increase on servers to speed up
+computation (e.g., workers = 25). Requires BiocParallel.}
 }
 \value{
-A dataframe of drug candidates with comprehensive reprogramming scores
+A dataframe sorted by reprogramming_score (descending) with columns:
+\itemize{
+\item \code{score_ncs}: Min-max normalized NCS \link{0, 1}
+\item \code{score_fdr}: FDR-based significance score \link{0, 1}
+\item \code{score_connectivity}: Combined NCS + FDR score \link{0, 1}
+\item \code{score_pathway}: Validated pathway score \link{0, 1}
+\item \code{matched_pathway}: Names of matched validated pathways
+\item \code{score_novel}: Novel pathway score (comprehensive only)
+\item \code{matched_novel}: Names of matched novel pathways
+(comprehensive only)
+\item \code{reprogramming_score}: Final weighted score
+\item \code{empirical_pval}: Permutation-based p-value (if perm = TRUE)
+\item \code{empirical_fdr}: BH-corrected FDR (if perm = TRUE)
+\item \code{score_ci_lower}: Bootstrap 95\\% CI lower bound
+(if perm = TRUE)
+\item \code{score_ci_upper}: Bootstrap 95\\% CI upper bound
+(if perm = TRUE)
+\item \code{is_toxic}: Logical, TRUE if on beta-cell toxicity blacklist
+\item \code{scoring_mode}: Records which mode was used
+}
 }
 \description{
-Score drug candidates for beta cell reprogramming potential
+Domain-specific scoring system for beta-cell reprogramming drug screening,
+with integrated statistical validation via permutation testing and
+bootstrap confidence intervals. Designed as a generalizable framework:
+beta-cell reprogramming pathways are used as defaults, but any cell type
+can be supported via custom pathway dictionaries.
+}
+\details{
+Two scoring modes are provided for sensitivity analysis:
+\itemize{
+\item \code{"conservative"}: connectivity (60\\%) + validated pathways (40\\%)
+\item \code{"comprehensive"}: connectivity (50\\%) + validated pathways (30\\%)
++ novel pathways (20\\%)
+}
+
+Connectivity score combines NCS magnitude (75\\%) and WTCS_FDR significance
+(25\\%) for more robust ranking than NCS alone.
+}
+\examples{
+\dontrun{
+# Quick run without statistics (low-resource machines)
+results <- score_reprogramming(results_forward, perm = FALSE)
+
+# Full run, single core (default)
+results_cons <- score_reprogramming(results_forward,
+                                    mode = "conservative",
+                                    n_perm = 1000,
+                                    workers = 1)
+
+# Full run, parallel (servers)
+results_cons <- score_reprogramming(results_forward,
+                                    mode = "conservative",
+                                    n_perm = 1000,
+                                    workers = 25)
+
+# Comprehensive mode for sensitivity analysis
+results_comp <- score_reprogramming(results_forward,
+                                    mode = "comprehensive",
+                                    n_perm = 1000,
+                                    workers = 25)
+
+# Compare modes (Spearman correlation)
+compare_modes(results_cons, results_comp)
+}
 }

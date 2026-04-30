@@ -2,30 +2,72 @@
 % Please edit documentation in R/build_signature.R
 \name{build_signature}
 \alias{build_signature}
-\title{Build a gene signature from DEG results}
+\title{Build a gene signature from differential expression results}
 \usage{
 build_signature(
   deg_file,
+  gene_col = "gene_symbol",
   lfc_col = "log2FoldChange",
   fdr_col = "padj",
-  lfc_cutoff = 0.5,
-  fdr_cutoff = 0.05
+  lfc_cutoff = 1,
+  fdr_cutoff = 0.05,
+  top_n = 150,
+  n_up = NULL,
+  n_down = NULL
 )
 }
 \arguments{
-\item{deg_file}{Path to the DEG CSV file}
+\item{deg_file}{Path to the DEG CSV file. Must contain columns for
+gene symbols, log2FoldChange, and FDR/padj.}
 
-\item{lfc_col}{Column name for log2FoldChange}
+\item{gene_col}{Column name for gene symbols (default "gene_symbol").}
 
-\item{fdr_col}{Column name for FDR/padj}
+\item{lfc_col}{Column name for log2FoldChange (default "log2FoldChange").}
 
-\item{lfc_cutoff}{Minimum absolute log2FoldChange (default 0.5)}
+\item{fdr_col}{Column name for adjusted p-value (default "padj").}
 
-\item{fdr_cutoff}{Maximum FDR (default 0.05)}
+\item{lfc_cutoff}{Minimum absolute log2FoldChange threshold
+(default 1, i.e. 2-fold change).}
+
+\item{fdr_cutoff}{Maximum FDR threshold (default 0.05).}
+
+\item{top_n}{Maximum number of genes per direction when n_up and
+n_down are not specified (default 150).}
+
+\item{n_up}{Maximum number of up-regulated genes to include
+(default NULL, uses top_n). Use to reduce query size for speed.}
+
+\item{n_down}{Maximum number of down-regulated genes to include
+(default NULL, uses top_n). Use to reduce query size for speed.}
 }
 \value{
-A list with upgenes and downgenes
+A named list compatible with query_cmap():
+\itemize{
+\item \code{upgenes}: Top up-regulated gene symbols
+\item \code{downgenes}: Top down-regulated gene symbols
+}
 }
 \description{
-Build a gene signature from DEG results
+Reads a DEG results file and extracts up- and down-regulated gene
+signatures for input to query_cmap(). Supports flexible filtering
+by log2FoldChange and FDR thresholds, with independent control of
+up/down gene counts via n_up and n_down parameters.
+}
+\examples{
+\dontrun{
+# Standard run
+sig <- build_signature(
+  deg_file = "/home/rstudio/data/results/deg_T2D_vs_ND_pseudobulk.csv"
+)
+
+# Smaller query for faster runtime
+sig_small <- build_signature(
+  deg_file = "/home/rstudio/data/results/deg_T2D_vs_ND_pseudobulk.csv",
+  n_up     = 50,
+  n_down   = 50
+)
+
+cat("Up genes:", length(sig$upgenes), "\n")
+cat("Down genes:", length(sig$downgenes), "\n")
+}
 }

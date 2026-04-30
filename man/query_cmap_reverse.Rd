@@ -4,7 +4,13 @@
 \alias{query_cmap_reverse}
 \title{Query CMap/LINCS database in reverse to identify harmful compounds}
 \usage{
-query_cmap_reverse(signature, db = "lincs", n_top = 100)
+query_cmap_reverse(
+  signature,
+  db = "lincs",
+  n_top = 100,
+  tau = FALSE,
+  workers = 1
+)
 }
 \arguments{
 \item{signature}{A list with upgenes and downgenes (from build_signature)}
@@ -12,6 +18,10 @@ query_cmap_reverse(signature, db = "lincs", n_top = 100)
 \item{db}{Database to query, either "lincs" or "lincs2" (default "lincs")}
 
 \item{n_top}{Number of top results to return (default 100)}
+
+\item{tau}{Logical, whether to compute tau score (default FALSE)}
+
+\item{workers}{Number of parallel workers for database query (default 1)}
 }
 \value{
 A dataframe of compounds that would worsen beta cell state
