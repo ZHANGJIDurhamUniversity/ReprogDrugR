@@ -37,10 +37,10 @@
 #'
 #' @return A dataframe sorted by reprogramming_score (descending) with columns:
 #'   \itemize{
-#'     \item \code{score_ncs}: Min-max normalized NCS [0, 1]
-#'     \item \code{score_fdr}: FDR-based significance score [0, 1]
-#'     \item \code{score_connectivity}: Combined NCS + FDR score [0, 1]
-#'     \item \code{score_pathway}: Validated pathway score [0, 1]
+#'     \item \code{score_ncs}: Min-max normalized NCS (0 to 1)
+#'     \item \code{score_fdr}: FDR-based significance score (0 to 1)
+#'     \item \code{score_connectivity}: Combined NCS + FDR score (0 to 1)
+#'     \item \code{score_pathway}: Validated pathway score (0 to 1)
 #'     \item \code{matched_pathway}: Names of matched validated pathways
 #'     \item \code{score_novel}: Novel pathway score (comprehensive only)
 #'     \item \code{matched_novel}: Names of matched novel pathways
@@ -104,7 +104,7 @@ score_reprogramming <- function(forward_results,
   if (abs(total_w - 1) > 1e-6)
     stop(sprintf("Weights must sum to 1 (current sum: %.3f)", total_w))
 
-  # ---------- 1. NCS score: min-max normalize to [0, 1] ----------
+  # ---------- 1. NCS score: min-max normalize to (0 to 1) ----------
   ncs_min   <- min(results$NCS, na.rm = TRUE)
   ncs_max   <- max(results$NCS, na.rm = TRUE)
   ncs_range <- ncs_max - ncs_min
@@ -115,7 +115,7 @@ score_reprogramming <- function(forward_results,
   }
 
   # ---------- 2. FDR significance score ----------
-  # Converts WTCS_FDR to [0,1]: lower FDR = higher score
+  # Converts WTCS_FDR to (0 to 1): lower FDR = higher score
   if ("WTCS_FDR" %in% colnames(results)) {
     results$score_fdr <- ifelse(
       is.na(results$WTCS_FDR),

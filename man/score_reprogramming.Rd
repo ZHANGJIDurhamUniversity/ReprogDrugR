@@ -13,8 +13,6 @@ score_reprogramming(
   custom_validated_pathways = NULL,
   custom_novel_pathways = NULL,
   toxicity_blacklist = NULL,
-  perm = TRUE,
-  n_perm = 1000,
   workers = 1
 )
 }
@@ -44,45 +42,30 @@ pathway dictionary.}
 \item{toxicity_blacklist}{Character vector of additional drug names to flag
 as toxic (merged with built-in beta-cell toxicity list).}
 
-\item{perm}{Logical. Whether to run permutation test and bootstrap CI
-(default TRUE). Set to FALSE for quick exploration on low-resource
-machines.}
-
-\item{n_perm}{Integer. Number of permutations/bootstrap iterations
-(default 1000 for publication quality; use 100 for quick testing).}
-
-\item{workers}{Integer. Number of parallel workers for permutation and
-bootstrap computation (default 1). Increase on servers to speed up
-computation (e.g., workers = 25). Requires BiocParallel.}
+\item{workers}{Integer. Number of parallel workers (default 1).
+Increase on servers (e.g., workers = 25).}
 }
 \value{
 A dataframe sorted by reprogramming_score (descending) with columns:
 \itemize{
-\item \code{score_ncs}: Min-max normalized NCS \link{0, 1}
-\item \code{score_fdr}: FDR-based significance score \link{0, 1}
-\item \code{score_connectivity}: Combined NCS + FDR score \link{0, 1}
-\item \code{score_pathway}: Validated pathway score \link{0, 1}
+\item \code{score_ncs}: Min-max normalized NCS (0 to 1)
+\item \code{score_fdr}: FDR-based significance score (0 to 1)
+\item \code{score_connectivity}: Combined NCS + FDR score (0 to 1)
+\item \code{score_pathway}: Validated pathway score (0 to 1)
 \item \code{matched_pathway}: Names of matched validated pathways
 \item \code{score_novel}: Novel pathway score (comprehensive only)
 \item \code{matched_novel}: Names of matched novel pathways
 (comprehensive only)
 \item \code{reprogramming_score}: Final weighted score
-\item \code{empirical_pval}: Permutation-based p-value (if perm = TRUE)
-\item \code{empirical_fdr}: BH-corrected FDR (if perm = TRUE)
-\item \code{score_ci_lower}: Bootstrap 95\\% CI lower bound
-(if perm = TRUE)
-\item \code{score_ci_upper}: Bootstrap 95\\% CI upper bound
-(if perm = TRUE)
 \item \code{is_toxic}: Logical, TRUE if on beta-cell toxicity blacklist
 \item \code{scoring_mode}: Records which mode was used
 }
 }
 \description{
-Domain-specific scoring system for beta-cell reprogramming drug screening,
-with integrated statistical validation via permutation testing and
-bootstrap confidence intervals. Designed as a generalizable framework:
-beta-cell reprogramming pathways are used as defaults, but any cell type
-can be supported via custom pathway dictionaries.
+Domain-specific scoring system for beta-cell reprogramming drug screening.
+Designed as a generalizable framework: beta-cell reprogramming pathways
+are used as defaults, but any cell type can be supported via custom
+pathway dictionaries.
 }
 \details{
 Two scoring modes are provided for sensitivity analysis:
@@ -97,26 +80,13 @@ Connectivity score combines NCS magnitude (75\\%) and WTCS_FDR significance
 }
 \examples{
 \dontrun{
-# Quick run without statistics (low-resource machines)
-results <- score_reprogramming(results_forward, perm = FALSE)
-
-# Full run, single core (default)
+# Conservative mode (main results)
 results_cons <- score_reprogramming(results_forward,
-                                    mode = "conservative",
-                                    n_perm = 1000,
-                                    workers = 1)
+                                    mode = "conservative")
 
-# Full run, parallel (servers)
-results_cons <- score_reprogramming(results_forward,
-                                    mode = "conservative",
-                                    n_perm = 1000,
-                                    workers = 25)
-
-# Comprehensive mode for sensitivity analysis
+# Comprehensive mode (sensitivity analysis)
 results_comp <- score_reprogramming(results_forward,
-                                    mode = "comprehensive",
-                                    n_perm = 1000,
-                                    workers = 25)
+                                    mode = "comprehensive")
 
 # Compare modes (Spearman correlation)
 compare_modes(results_cons, results_comp)

@@ -10,6 +10,9 @@
 #'
 #' @return A dataframe of top drug candidates with scores and LINCS
 #'   annotations
+#' @importFrom AnnotationDbi mapIds
+#' @importFrom org.Hs.eg.db org.Hs.eg.db
+#' @importFrom utils data
 #' @export
 query_cmap <- function(signature,
                        db              = "lincs",
