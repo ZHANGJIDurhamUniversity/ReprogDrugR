@@ -274,92 +274,74 @@ score_reprogramming <- function(forward_results,
       weight_novel   * results$score_novel
   }
 
-  # ---------- 8. Statistical validation ----------
+  # ---------- 8. Statistical validation: Bootstrap CI ----------
+  # Assesses ranking stability by resampling drugs with replacement.
+  # 95% CI indicates how stable each drug's reprogramming score is.
+  # Wide CI = unstable ranking; narrow CI = robust candidate.
   if (perm && length(moa_col) > 0) {
 
     message(sprintf(
-      "Running permutation test and bootstrap CI (n=%d, workers=%d)...",
+      "Running bootstrap CI (n=%d, workers=%d)...",
       n_perm, workers
     ))
 
-    observed_scores <- results$reprogramming_score
+    # Pre-extract vectors to avoid repeated dataframe access in loop
+    connectivity_vec <- results$score_connectivity
+    pathway_vec      <- results$score_pathway
+    if (mode == "comprehensive") {
+      novel_vec <- results$score_novel
+    }
 
-    # Helper: compute scores for one permutation/bootstrap iteration
-    compute_iter_scores <- function(iter_idx, boot = FALSE) {
-      iter_data <- results
-
-      if (boot) {
-        # Bootstrap: resample rows with replacement
-        iter_data <- results[sample(nrow(results), replace = TRUE), ]
-      } else {
-        # Permutation: shuffle MOA to break drug-pathway association
-        iter_data[[moa_col[1]]] <- sample(results[[moa_col[1]]])
-      }
-
-      # Recompute pathway scores
-      p_val <- lapply(iter_data[[moa_col[1]]],
-                      score_pathway_fn, validated_pathways)
-      p_s_pathway <- sapply(p_val, `[[`, "score")
+    # Bootstrap: resample drugs with replacement, recompute score each time
+    compute_boot_scores <- function(iter_idx) {
+      idx               <- sample(nrow(results), replace = TRUE)
+      boot_connectivity <- connectivity_vec[idx]
+      boot_pathway      <- pathway_vec[idx]
 
       if (mode == "conservative") {
-        weight_ncs     * iter_data$score_connectivity +
-          weight_pathway * p_s_pathway
+        weight_ncs     * boot_connectivity +
+          weight_pathway * boot_pathway
       } else {
-        p_nov <- lapply(iter_data[[moa_col[1]]],
-                        score_pathway_fn, novel_pathways)
-        p_s_novel <- sapply(p_nov, `[[`, "score")
-        weight_ncs     * iter_data$score_connectivity +
-          weight_pathway * p_s_pathway +
-          weight_novel   * p_s_novel
+        boot_novel <- novel_vec[idx]
+        weight_ncs     * boot_connectivity +
+          weight_pathway * boot_pathway +
+          weight_novel   * boot_novel
       }
     }
 
-    # Set up parallel backend
+    # Run bootstrap (parallel or single core)
     if (workers > 1) {
       if (!requireNamespace("BiocParallel", quietly = TRUE))
-        stop("BiocParallel required for workers > 1. Install with:\n",
-             "  BiocManager::install('BiocParallel')")
+        stop("BiocParallel required for workers > 1.\n",
+             "Install: BiocManager::install('BiocParallel')")
       BiocParallel::register(
-        BiocParallel::MulticoreParam(workers = workers, progressbar = TRUE)
+        BiocParallel::MulticoreParam(
+          workers     = workers,
+          progressbar = TRUE,
+          tasks       = n_perm
+        )
       )
-      perm_mat <- do.call(
-        cbind,
-        BiocParallel::bplapply(seq_len(n_perm),
-                               compute_iter_scores, boot = FALSE)
-      )
-      boot_mat <- do.call(
-        cbind,
-        BiocParallel::bplapply(seq_len(n_perm),
-                               compute_iter_scores, boot = TRUE)
-      )
+      boot_mat <- do.call(cbind, BiocParallel::bplapply(
+        seq_len(n_perm), compute_boot_scores
+      ))
     } else {
-      # Single core: simple replicate loop
-      perm_mat <- replicate(n_perm, compute_iter_scores(1, boot = FALSE))
-      boot_mat <- replicate(n_perm, compute_iter_scores(1, boot = TRUE))
+      boot_mat <- replicate(n_perm, compute_boot_scores(1))
     }
 
-    # --- Permutation test: empirical p-value ---
-    # p = proportion of permuted scores >= observed score
-    results$empirical_pval <- sapply(seq_len(nrow(results)), function(i) {
-      mean(perm_mat[i, ] >= observed_scores[i])
-    })
-
-    # BH-corrected FDR across all drugs
-    results$empirical_fdr <- p.adjust(results$empirical_pval, method = "BH")
-
-    # --- Bootstrap: 95% confidence interval ---
-    results$score_ci_lower <- apply(boot_mat, 1,
-                                    quantile, probs = 0.025, na.rm = TRUE)
-    results$score_ci_upper <- apply(boot_mat, 1,
-                                    quantile, probs = 0.975, na.rm = TRUE)
+    # 95% confidence interval from bootstrap distribution
+    results$score_ci_lower <- apply(boot_mat, 1, quantile,
+                                    probs = 0.025, na.rm = TRUE)
+    results$score_ci_upper <- apply(boot_mat, 1, quantile,
+                                    probs = 0.975, na.rm = TRUE)
+    results$score_ci_width <- results$score_ci_upper - results$score_ci_lower
 
     message(sprintf(
-      "Significant candidates (empirical FDR < 0.05): %d",
-      sum(results$empirical_fdr < 0.05, na.rm = TRUE)
+      "Bootstrap complete | Median CI width: %.4f",
+      median(results$score_ci_width, na.rm = TRUE)
     ))
 
-  } else if (perm && length(moa_col) == 0) {
-    warning("Permutation test skipped: no MOA column found")
+  } else if (!perm) {
+    message("Bootstrap CI skipped (perm = FALSE)")
   }
 
   # ---------- 9. Beta-cell toxicity blacklist (fuzzy match) ----------
